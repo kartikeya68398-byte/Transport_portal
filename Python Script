@@ -1,0 +1,266 @@
+# transport_pandas.py
+import tkinter as tk
+from tkinter import messagebox, simpledialog
+import pandas as pd
+import os
+
+# ---------- File names ----------
+VEHICLES_FILE = "vehicles.csv"
+CLIENTS_FILE = "clients.csv"
+BOOKINGS_FILE = "bookings.csv"
+
+# ---------- Helper: ensure CSVs exist ----------
+def ensure_files():
+    if not os.path.exists(VEHICLES_FILE):
+        df = pd.DataFrame(columns=["vehicle_id", "type", "status"])
+        df.to_csv(VEHICLES_FILE, index=False)
+    if not os.path.exists(CLIENTS_FILE):
+        df = pd.DataFrame(columns=["client_id", "name", "contact"])
+        df.to_csv(CLIENTS_FILE, index=False)
+    if not os.path.exists(BOOKINGS_FILE):
+        df = pd.DataFrame(columns=["client_id", "vehicle_id"])
+        df.to_csv(BOOKINGS_FILE, index=False)
+
+def load_vehicles():
+    return pd.read_csv(VEHICLES_FILE, dtype=str).fillna("")
+
+def save_vehicles(df):
+    df.to_csv(VEHICLES_FILE, index=False)
+
+def load_clients():
+    return pd.read_csv(CLIENTS_FILE, dtype=str).fillna("")
+
+def save_clients(df):
+    df.to_csv(CLIENTS_FILE, index=False)
+
+def load_bookings():
+    return pd.read_csv(BOOKINGS_FILE, dtype=str).fillna("")
+
+def save_bookings(df):
+    df.to_csv(BOOKINGS_FILE, index=False)
+
+# ensure files exist on start
+ensure_files()
+
+# ---------- MAIN APP ----------
+class TransportApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Transportation Management Portal Pandas Edition")
+        self.geometry("620x420")
+        self.configure(bg="#f0f0f0")
+        self.currentclient = None
+        print("App initialized, showing home page")
+        self.showhomepage()  # Ensure this is called here to populate UI
+
+    def clear(self):
+        for w in self.winfo_children():
+            w.destroy()
+
+    def showhomepage(self):
+        self.clear()
+        print("Displaying homepage")
+        tk.Label(self, text="Transportation Management Portal", 
+                 font=("Arial", 18, "bold"), bg="#f0f0f0").pack(pady=20)
+        tk.Button(self, text="Admin Login", width=28, 
+                  command=self.show_admin_menu, bg="#4CAF50", fg="white").pack(pady=10)
+        tk.Button(self, text="Client Login", width=28, 
+                  command=self.client_login, bg="#2196F3", fg="white").pack(pady=10)
+        tk.Button(self, text="Exit", width=28, 
+                  command=self.destroy, bg="#f44336", fg="white").pack(pady=10)
+
+    # ---------- ADMIN MENU ----------
+    def show_admin_menu(self):  # <- Properly indented as class method
+        self.clear()
+        tk.Label(self, text="Admin Dashboard", font=("Arial", 16, "bold")).pack(pady=15)
+        tk.Button(self, text="Add Vehicle", width=25, command=self.add_vehicle).pack(pady=5)
+        tk.Button(self, text="View Vehicles", width=25, command=self.view_vehicles).pack(pady=5)
+        tk.Button(self, text="Add Client", width=25, command=self.add_client).pack(pady=5)
+        tk.Button(self, text="View Clients", width=25, command=self.view_clients).pack(pady=5)
+        tk.Button(self, text="Assign Vehicle", width=25, command=self.assign_vehicle).pack(pady=5)
+        tk.Button(self, text="View All Bookings", width=25, command=self.view_bookings).pack(pady=5)
+        tk.Button(self, text="Logout", width=25, command=self.showhomepage, 
+                  bg="#f44336", fg="white").pack(pady=10)
+
+    # ---------- CLIENT LOGIN ----------
+    def client_login(self):
+        cid = simpledialog.askstring("Client Login", "Enter Client ID:")
+        if not cid:
+            return
+        clients = load_clients()
+        if cid in list(clients["client_id"]):
+            self.current_client = cid
+            name = clients.loc[clients["client_id"] == cid, "name"].values[0]
+            self.show_client_menu(name)
+        else:
+            messagebox.showerror("Error", "Client not found. Contact Admin.")
+
+    # ---------- CLIENT MENU ----------
+    def show_client_menu(self, client_name):
+        self.clear()
+        tk.Label(self, text=f"👤 Welcome {client_name}", font=("Arial", 16, "bold")).pack(pady=15)
+        tk.Button(self, text="View Available Vehicles", width=28, command=self.view_available_vehicles).pack(pady=5)
+        tk.Button(self, text="Request Transport", width=28, command=self.request_transport).pack(pady=5)
+        tk.Button(self, text="My Bookings", width=28, command=self.my_bookings).pack(pady=5)
+        tk.Button(self, text="Logout", width=28, command=self.logout_client,
+                  bg="#f44336", fg="white").pack(pady=10)
+
+    def logout_client(self):
+        self.current_client = None
+        self.show_home_page()
+
+    # ---------- ADD CLIENT ----------
+    def add_client(self):
+        cid = simpledialog.askstring("Add Client", "Enter Client ID:")
+        if not cid:
+            return
+        name = simpledialog.askstring("Add Client", "Enter Name:")
+        contact = simpledialog.askstring("Add Client", "Enter Contact Number:")
+        if not name:
+            messagebox.showwarning("Warning", "Name is required.")
+            return
+        clients = load_clients()
+        if cid in list(clients["client_id"]):
+            messagebox.showwarning("Warning", f"Client ID '{cid}' already exists.")
+            return
+        new = pd.DataFrame([{"client_id": cid, "name": name, "contact": contact or ""}])
+        clients = pd.concat([clients, new], ignore_index=True)
+        save_clients(clients)
+        messagebox.showinfo("Success", "Client added successfully.")
+
+    # ---------- VIEW CLIENTS ----------
+    def view_clients(self):
+        clients = load_clients()
+        if clients.empty:
+            messagebox.showinfo("Clients", "No clients found.")
+            return
+        info = "\n".join([f"ID: {row.client_id} | Name: {row.name} | Contact: {row.contact}"
+                          for row in clients.itertuples()])
+        messagebox.showinfo("All Clients", info)
+
+    # ---------- ADD VEHICLE ----------
+    def add_vehicle(self):
+        vid = simpledialog.askstring("Add Vehicle", "Enter Vehicle ID:")
+        if not vid:
+            return
+        vtype = simpledialog.askstring("Add Vehicle", "Vehicle Type (Bus/Truck/Car):")
+        if not vtype:
+            messagebox.showwarning("Warning", "Vehicle Type is required.")
+            return
+        vehicles = load_vehicles()
+        if vid in list(vehicles["vehicle_id"]):
+            messagebox.showwarning("Warning", f"Vehicle ID '{vid}' already exists.")
+            return
+        new = pd.DataFrame([{"vehicle_id": vid, "type": vtype, "status": "Available"}])
+        vehicles = pd.concat([vehicles, new], ignore_index=True)
+        save_vehicles(vehicles)
+        messagebox.showinfo("Success", "Vehicle added successfully.")
+
+    # ---------- VIEW VEHICLES ----------
+    def view_vehicles(self):
+        vehicles = load_vehicles()
+        if vehicles.empty:
+            messagebox.showinfo("All Vehicles", "No vehicles found.")
+            return
+        info = "\n".join([f"ID: {r.vehicle_id} | Type: {r.type} | Status: {r.status}"
+                          for r in vehicles.itertuples()])
+        messagebox.showinfo("All Vehicles", info)
+
+    def view_available_vehicles(self):
+        vehicles = load_vehicles()
+        available = vehicles[vehicles["status"].str.lower() == "available"]
+        if available.empty:
+            messagebox.showinfo("Available Vehicles", "No available vehicles right now.")
+            return
+        info = "\n".join([f"ID: {r.vehicle_id} | Type: {r.type}" for r in available.itertuples()])
+        messagebox.showinfo("Available Vehicles", info)
+
+    # ---------- ASSIGN VEHICLE ----------
+    def assign_vehicle(self):
+        cid = simpledialog.askstring("Assign Vehicle", "Client ID:")
+        vid = simpledialog.askstring("Assign Vehicle", "Vehicle ID:")
+        if not cid or not vid:
+            return
+        clients = load_clients()
+        if cid not in list(clients["client_id"]):
+            messagebox.showerror("Error", "Client not found.")
+            return
+        vehicles = load_vehicles()
+        if vid not in list(vehicles["vehicle_id"]):
+            messagebox.showerror("Error", "Vehicle not found.")
+            return
+        status = vehicles.loc[vehicles["vehicle_id"] == vid, "status"].values[0]
+        if str(status).lower() != "available":
+            messagebox.showerror("Error", "Vehicle is not available.")
+            return
+        # update vehicles
+        vehicles.loc[vehicles["vehicle_id"] == vid, "status"] = "Booked"
+        save_vehicles(vehicles)
+        # add booking
+        bookings = load_bookings()
+        new = pd.DataFrame([{"client_id": cid, "vehicle_id": vid}])
+        bookings = pd.concat([bookings, new], ignore_index=True)
+        save_bookings(bookings)
+        messagebox.showinfo("Success", "Vehicle assigned to client.")
+
+    # ---------- VIEW BOOKINGS ----------
+    def view_bookings(self):
+        bookings = load_bookings()
+        if bookings.empty:
+            messagebox.showinfo("All Bookings", "No bookings found.")
+            return
+        clients = load_clients()
+        # join to get client name
+        merged = bookings.merge(clients, how="left", left_on="client_id", right_on="client_id")
+        info = "\n".join([f"Client: {row.name or row.client_id} | Vehicle: {row.vehicle_id}"
+                          for row in merged.itertuples()])
+        messagebox.showinfo("All Bookings", info)
+
+    # ---------- CLIENT: REQUEST TRANSPORT ----------
+    def request_transport(self):
+        if not self.current_client:
+            messagebox.showerror("Error", "No client logged in.")
+            return
+        vehicles = load_vehicles()
+        available = vehicles[vehicles["status"].str.lower() == "available"]
+        if available.empty:
+            messagebox.showinfo("Info", "No available vehicles right now.")
+            return
+        ids = list(available["vehicle_id"])
+        vid = simpledialog.askstring("Request Transport",
+                                     f"Enter Vehicle ID from available: {ids}")
+        if not vid:
+            return
+        if vid not in ids:
+            messagebox.showerror("Error", "Invalid Vehicle ID or not available.")
+            return
+        # book it
+        vehicles.loc[vehicles["vehicle_id"] == vid, "status"] = "Booked"
+        save_vehicles(vehicles)
+        bookings = load_bookings()
+        new = pd.DataFrame([{"client_id": self.current_client, "vehicle_id": vid}])
+        bookings = pd.concat([bookings, new], ignore_index=True)
+        save_bookings(bookings)
+        messagebox.showinfo("Success", "Vehicle booked successfully!")
+
+    # ---------- CLIENT: MY BOOKINGS ----------
+    def my_bookings(self):
+        if not self.current_client:
+            messagebox.showerror("Error", "No client logged in.")
+            return
+        bookings = load_bookings()
+        my = bookings[bookings["client_id"] == self.current_client]
+        if my.empty:
+            messagebox.showinfo("My Bookings", "No bookings yet.")
+            return
+        info = "\n".join([f"Vehicle: {r.vehicle_id}" for r in my.itertuples()])
+        messagebox.showinfo("My Bookings", info)
+
+# ---------- RUN ----------
+if __name__ == "__main__":
+    try:
+        app = TransportApp()
+        app.mainloop()
+    except Exception as e:
+        print("Error:", e)
+
